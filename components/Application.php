@@ -21,10 +21,11 @@ class Application {
     public function run(){
         $url_params = $this->config['urlManager'];
         
-       
-        
         $this->ulrMenedger = new $url_params['class']($url_params['params']);
-        $this->ulrMenedger->getController();
+        $ctrl_params = $this->ulrMenedger->getController();
+        $ctrl = $ctrl_params['ctrl_obj'];
+        $action = $ctrl_params['action_name'];
+        $ctrl->$action();
     }
     
 }

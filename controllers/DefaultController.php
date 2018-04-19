@@ -9,5 +9,15 @@ class DefaultController {
         die;
     }
     
+    public function actionAdminLogin(){
+        echo "admin-login";
+        die;
+    }
+    
+    public function actionNoteList(){
+        echo "note-list";
+        die;
+    }
+    
 }
 

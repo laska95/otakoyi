@@ -25,9 +25,9 @@ class UrlMenedger {
 
 
     public function __construct($params) {
-        
         $this->base_dir = self::BASE_DIR;
-        $this->url = substr($_SERVER['REQUEST_URI'], 0, strpos($_SERVER['REQUEST_URI'], '?'));
+        $q_index = strpos($_SERVER['REQUEST_URI'], '?');
+        $this->url = ($q_index > -1) ? substr($_SERVER['REQUEST_URI'], 0, $q_index) : $_SERVER['REQUEST_URI'];
         foreach ($params as $key => $val){
             if (isset($this->$key)){
                 $this->$key = $val;
@@ -40,7 +40,6 @@ class UrlMenedger {
         foreach ($this->rules as $rule_pattern => $rule_result){
             $test = $this->testUrl($rule_pattern, $this->url);
             if ($test['value']){
-                
                 $ctrl_name = self::BASE_DIR . '-' . $this->getPropName('<CTRL>', $test['params'], $rule_result) . '-controller';
                 $ctrl_name = $this->dashesToCamelCase($ctrl_name, FALSE);
                 
@@ -49,17 +48,13 @@ class UrlMenedger {
                 
                 $ctrl_path = $this->getCtrlPath($rule_result, $ctrl_name);
                 $ctrl_obj = new $ctrl_path();
-                var_dump($ctrl_obj);
-                die;
-                var_dump($ctrl_name, $act_name);
-                die;
-//                $ctrl_path = str_replace('<CTRL>', $test['params']['<CTRL>'], $rule_result);
-                
+
+                return [
+                    'ctrl_obj' => $ctrl_obj,
+                    'action_name' => $act_name,
+                    'params' =>$test['params']
+                ];
             }
-//            var_dump($test);
-//            if ($ret = ){
-//                var_dump($re)
-//            }
         }
 
         throw new \Exception('Incorrect url');
@@ -67,7 +62,7 @@ class UrlMenedger {
     
     
     public function testUrl($rule_pattern, $url){
-        
+
         $ret = [ 'value' => FALSE ];
         $ret_params = [];
 
@@ -77,7 +72,7 @@ class UrlMenedger {
         if (count($arr_pttrn) !== count($arr_url)){
             return $ret;
         }
-                
+        
         foreach ($arr_pttrn as $i => $one_pttrn){
             if (isset($this->patterns[$one_pttrn])){
                 //це абрівіатура контроллера чи дії
@@ -117,8 +112,6 @@ class UrlMenedger {
     private function getCtrlPath($rule_result, $ctrl_name){
         $arr = array_filter(explode('/', $rule_result));
         $new_arr = [];
-        var_dump($arr);
-//        die;
         foreach ($arr as $one){
             if (preg_match("#(^<CTRL>$)|(^<CTRL=)#", $one)){
                 $new_arr[] = $ctrl_name;

@@ -4,9 +4,10 @@ $urlManager = [
     'class' => '\components\UrlMenedger',
     'params' => [
         'rules' => [
+            "" => "<CTRL=default>/<ACT=index>",
             "<CTRL>" => "<CTRL>/<ACT=index>",
             "<CTRL>/<ACT>" => "<CTRL>/<ACT>",
-            "api/<CTRL>/<ACT>" => "<CTRL>/<ACT>",
+            "___/<CTRL>/<ACT>" => "<CTRL>/<ACT>",
         ]
     ]
     
