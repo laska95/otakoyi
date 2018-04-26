@@ -14,8 +14,10 @@ class UrlMenedger {
     const BASE_DIR = 'controllers\\';
     
     public $patterns = [
-        '<CTRL>' => '#^[a-zA-Z0-9\-\_]{1,}$#',
-        '<ACT>' => '#^[a-zA-Z0-9\-\_]{1,}$#'
+        '<CTRL>' => '[a-zA-Z0-9\-\_]{1,}',
+        '<ACT>' => '[a-zA-Z0-9\-\_]{1,}',
+        '<PGN>' => '[0-9]{1,}', //page number
+        '<ID>' => '[0-9]{1,}'
     ];
 
 
@@ -23,44 +25,75 @@ class UrlMenedger {
     public $base_dir;
     public $url;
 
+    public $url_data;
+    public $url_rule;
+
 
     public function __construct($params) {
         $this->base_dir = self::BASE_DIR;
         $q_index = strpos($_SERVER['REQUEST_URI'], '?');
         $this->url = ($q_index > -1) ? substr($_SERVER['REQUEST_URI'], 0, $q_index) : $_SERVER['REQUEST_URI'];
+                
         foreach ($params as $key => $val){
             if (isset($this->$key)){
                 $this->$key = $val;
             }
         }
+        
+        $this->url_data = $this->parseUrl();
     }
     
-    public function getController(){
-
-        foreach ($this->rules as $rule_pattern => $rule_result){
+    public function parseUrl(){
+        
+        $ret = [];
+        $test_ret = FALSE;
+        $rule_result = '';
+        
+        foreach ($this->rules as $rule_pattern => $rule_rslt){
             $test = $this->testUrl($rule_pattern, $this->url);
             if ($test['value']){
-                $ctrl_name = self::BASE_DIR . '-' . $this->getPropName('<CTRL>', $test['params'], $rule_result) . '-controller';
-                $ctrl_name = $this->dashesToCamelCase($ctrl_name, FALSE);
-                
-                $act_name = 'action-' . $this->getPropName('<ACT>', $test['params'], $rule_result);
-                $act_name = $this->dashesToCamelCase($act_name, FALSE);
-                
-                $ctrl_path = $this->getCtrlPath($rule_result, $ctrl_name);
-                $ctrl_obj = new $ctrl_path();
-
-                return [
-                    'ctrl_obj' => $ctrl_obj,
-                    'action_name' => $act_name,
-                    'params' =>$test['params']
-                ];
+                $test_ret = $test['params'];
+                $rule_result = $rule_rslt;
+                $this->url_rule = $rule_pattern;
+                break;
             }
         }
 
-        throw new \Exception('Incorrect url');
+        if ($test_ret !== FALSE){
+            foreach ($this->patterns as $key => $reg){
+                $ret[$key] = $this->getPropValue($key, $test_ret, $rule_result);
+            }
+            return $ret;
+        }
+        
+        return [];
+    }
+
+    public function getController(){
+
+        if (isset($this->url_data['<CTRL>'])){
+            $ctrl_name = self::BASE_DIR . '-' . $this->url_data['<CTRL>'] . '-controller';
+            $ctrl_name = $this->dashesToCamelCase($ctrl_name, FALSE);
+            $ctrl_path = $this->getCtrlPath($this->rules[$this->url_rule], $ctrl_name);
+            $ctrl_obj = new $ctrl_path();
+            return $ctrl_obj;
+        } else {
+            return NULL;
+        }
+        
     }
     
-    
+    public function getAction(){
+        if (isset($this->url_data['<ACT>'])){
+            $act_name = 'action-' . $this->url_data['<ACT>'];
+            $act_name = $this->dashesToCamelCase($act_name, FALSE);
+            return $act_name;
+        } else {
+            return NULL;
+        }
+    }
+
+
     public function testUrl($rule_pattern, $url){
 
         $ret = [ 'value' => FALSE ];
@@ -68,17 +101,22 @@ class UrlMenedger {
 
         $arr_pttrn = array_values(array_filter(explode('/', $rule_pattern)));
         $arr_url = array_values(array_filter(explode('/', $url)));
-
+        
         if (count($arr_pttrn) !== count($arr_url)){
             return $ret;
-        }
-        
-        foreach ($arr_pttrn as $i => $one_pttrn){
-            if (isset($this->patterns[$one_pttrn])){
+        }      
+           
+        foreach ($arr_pttrn as $i => $one_pttrn){ 
+            preg_match("#\<[A-Z]{1,10}\>#", $one_pttrn, $matches); 
+            if (!empty($matches) && isset($this->patterns[$matches[0]])){
                 //це абрівіатура контроллера чи дії
-                $test = preg_match($this->patterns[$one_pttrn], $arr_url[$i]);
+                $prefix = substr($one_pttrn, 0, strpos($one_pttrn, '<'));
+                $suffix = substr($one_pttrn, strpos($one_pttrn, '>') + 1);
+                $reg_pattern = "#^" . $prefix . $this->patterns[$matches[0]] . $suffix . "$#";
+                $test = preg_match($reg_pattern, $arr_url[$i]);
                 if ($test){
-                    $ret_params[$one_pttrn] = $arr_url[$i];
+                    $value = preg_replace("#(^{$prefix})|({$suffix}$)#", '', $arr_url[$i]);
+                    $ret_params[$matches[0]] = $value;
                 } else {
                     return $ret;    //false - правило не співпадає
                 }
@@ -89,21 +127,27 @@ class UrlMenedger {
                 }
             }
         }
-        
+
         $ret['value'] = TRUE;
         $ret['params'] = $ret_params;
-        return $ret; //правило співпадає, всі параметри опізнано
+        return $ret; //правило співпадає, всі параметри розпізнано
     }
     
-    private function getPropName($prop_name, $test_params, $rule_result){
+    private function getPropValue($prop_name, $test_params, $rule_result){
         if (isset($test_params[$prop_name])){
             return $test_params[$prop_name];
         } 
         
         $pp = substr($prop_name, 0, -1) . '='; // '<CRTL>' ==> '<CTRL='
-        $name_from_rule = preg_replace("#^.{0,}{$pp}#", '', $rule_result);
-        $name_from_rule = preg_replace("#>.{0,}$#", '', $name_from_rule);
-        return $name_from_rule; // '<CTRL=default>'  ==> return 'default'
+        if (preg_match("#$pp#", $rule_result)){
+            $name_from_rule = preg_replace("#^.{0,}{$pp}#", '', $rule_result);
+            $name_from_rule = preg_replace("#>.{0,}$#", '', $name_from_rule);
+            return $name_from_rule; // '<CTRL=default>'  ==> return 'default'
+        } else {
+            return NULL;
+        }
+        
+        
     }
     
     /*

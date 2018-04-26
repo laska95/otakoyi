@@ -16,16 +16,23 @@ class Application {
 
     public function __construct($config) {
         $this->config = $config;
+        $this->parseUrl();
     }
 
     public function run(){
-        $url_params = $this->config['urlManager'];
         
-        $this->ulrMenedger = new $url_params['class']($url_params['params']);
-        $ctrl_params = $this->ulrMenedger->getController();
-        $ctrl = $ctrl_params['ctrl_obj'];
-        $action = $ctrl_params['action_name'];
-        $ctrl->$action();
+        $ctrl = $this->ulrMenedger->getController();
+        $act = $this->ulrMenedger->getAction();
+                    
+        if (!$ctrl || !$act){
+            throw new \Exception('Incorrect url');
+        }
+        
+        $ctrl->$act();
     }
     
+    private function parseUrl(){
+        $url_params = $this->config['urlManager'];
+        $this->ulrMenedger = new $url_params['class']($url_params['params']);
+    }
 }
